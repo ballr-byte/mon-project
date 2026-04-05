@@ -25,7 +25,7 @@ def main():
 
     if command == "scrape":
         from scraper import run_scraper
-        asyncio.run(run_scraper())
+        run_scraper()
 
     elif command == "find-emails":
         from email_finder import run_email_finder
@@ -42,9 +42,9 @@ def main():
         run_sender(limit=limit)
 
     elif command == "all":
-        print("=== Step 1: Scraping Google Maps ===")
+        print("=== Step 1: Scraping Yelp ===")
         from scraper import run_scraper
-        asyncio.run(run_scraper())
+        run_scraper()
 
         print("\n=== Step 2: Finding Emails ===")
         from email_finder import run_email_finder

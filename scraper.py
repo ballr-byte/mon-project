@@ -1,13 +1,14 @@
 """
-Google Maps scraper for auto detailing businesses across US & Canada.
-Uses Playwright to search Google Maps and extract business info.
+Scrapes Yelp for auto detailing businesses across US & Canada.
+Uses requests + BeautifulSoup (no browser required).
 """
 
-import asyncio
 import csv
-import re
 import time
-from playwright.async_api import async_playwright
+import re
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import quote
 
 CITIES = [
     # USA
@@ -16,88 +17,91 @@ CITIES = [
     "Dallas, TX", "San Jose, CA", "Austin, TX", "Jacksonville, FL",
     "Fort Worth, TX", "Columbus, OH", "Charlotte, NC", "Indianapolis, IN",
     "San Francisco, CA", "Seattle, WA", "Denver, CO", "Nashville, TN",
-    "Oklahoma City, OK", "Las Vegas, NV", "Portland, OR", "Memphis, TN",
-    "Louisville, KY", "Baltimore, MD", "Milwaukee, WI", "Albuquerque, NM",
-    "Tucson, AZ", "Fresno, CA", "Atlanta, GA", "Miami, FL",
+    "Las Vegas, NV", "Portland, OR", "Atlanta, GA", "Miami, FL",
     # Canada
     "Toronto, ON", "Montreal, QC", "Vancouver, BC", "Calgary, AB",
-    "Edmonton, AB", "Ottawa, ON", "Winnipeg, MB", "Quebec City, QC",
-    "Hamilton, ON", "Brampton, ON", "Surrey, BC", "Kitchener, ON",
+    "Edmonton, AB", "Ottawa, ON", "Winnipeg, MB", "Hamilton, ON",
 ]
 
-SEARCH_QUERY = "auto detailing"
 OUTPUT_FILE = "leads.csv"
-MAX_PER_CITY = 5  # businesses to scrape per city (5 x 32 cities = ~160 leads)
+MAX_PER_CITY = 5
+
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept-Language": "en-US,en;q=0.9",
+}
 
 
-async def scrape_city(page, city: str) -> list[dict]:
+def scrape_city(city: str) -> list[dict]:
     leads = []
-    query = f"{SEARCH_QUERY} {city}"
-    url = f"https://www.google.com/maps/search/{query.replace(' ', '+')}"
+    url = f"https://www.yelp.com/search?find_desc=auto+detailing&find_loc={quote(city)}"
 
     try:
-        await page.goto(url, wait_until="networkidle", timeout=30000)
-        await page.wait_for_timeout(3000)
+        resp = requests.get(url, headers=HEADERS, timeout=15)
+        soup = BeautifulSoup(resp.text, "html.parser")
 
-        # Scroll the results panel to load more listings
-        results_panel = page.locator('[role="feed"]')
-        for _ in range(3):
-            await results_panel.evaluate("el => el.scrollBy(0, 500)")
-            await page.wait_for_timeout(1000)
+        # Find business result cards
+        results = soup.select('h3 a[href*="/biz/"]')
+        results = results[:MAX_PER_CITY]
 
-        # Collect all listing links
-        listings = await page.locator('[role="feed"] a[href*="/maps/place/"]').all()
-        listings = listings[:MAX_PER_CITY]
-
-        for listing in listings:
-            try:
-                name = await listing.get_attribute("aria-label") or ""
-                href = await listing.get_attribute("href") or ""
-                if not name or not href:
-                    continue
-
-                # Open the listing detail page
-                detail_page = await page.context.new_page()
-                await detail_page.goto(href, wait_until="networkidle", timeout=20000)
-                await detail_page.wait_for_timeout(2000)
-
-                # Extract website
-                website = ""
-                website_link = detail_page.locator('a[data-item-id="authority"]')
-                if await website_link.count() > 0:
-                    website = await website_link.get_attribute("href") or ""
-
-                # Extract phone
-                phone = ""
-                phone_el = detail_page.locator('[data-item-id^="phone"]')
-                if await phone_el.count() > 0:
-                    phone = await phone_el.get_attribute("aria-label") or ""
-                    phone = phone.replace("Phone:", "").strip()
-
-                # Extract address
-                address = ""
-                addr_el = detail_page.locator('[data-item-id="address"]')
-                if await addr_el.count() > 0:
-                    address = await addr_el.get_attribute("aria-label") or ""
-                    address = address.replace("Address:", "").strip()
-
-                if name:
-                    leads.append({
-                        "business_name": name.strip(),
-                        "city": city,
-                        "address": address,
-                        "phone": phone,
-                        "website": website,
-                        "email": "",  # filled by email_finder.py
-                        "status": "new",
-                    })
-                    print(f"  [+] {name.strip()} | {website or 'no website'}")
-
-                await detail_page.close()
-
-            except Exception as e:
-                print(f"  [!] Error parsing listing: {e}")
+        for link in results:
+            name = link.get_text(strip=True)
+            href = link.get("href", "")
+            if not name or not href:
                 continue
+
+            full_url = f"https://www.yelp.com{href}" if href.startswith("/") else href
+
+            # Visit business page to get website
+            website = ""
+            phone = ""
+            address = ""
+            try:
+                biz_resp = requests.get(full_url, headers=HEADERS, timeout=12)
+                biz_soup = BeautifulSoup(biz_resp.text, "html.parser")
+
+                # Website
+                website_link = biz_soup.find("a", href=re.compile(r"^https?://"), string=re.compile(r"\.", re.I))
+                if not website_link:
+                    website_link = biz_soup.find("a", {"href": re.compile(r"biz_redir")})
+                if website_link:
+                    website = website_link.get("href", "")
+                    # Clean up Yelp redirect URLs
+                    if "biz_redir" in website:
+                        match = re.search(r"url=([^&]+)", website)
+                        if match:
+                            from urllib.parse import unquote
+                            website = unquote(match.group(1))
+
+                # Phone
+                phone_el = biz_soup.find("p", string=re.compile(r"\(\d{3}\)"))
+                if phone_el:
+                    phone = phone_el.get_text(strip=True)
+
+                # Address
+                addr_el = biz_soup.find("address")
+                if addr_el:
+                    address = addr_el.get_text(separator=", ", strip=True)
+
+                time.sleep(1)
+
+            except Exception:
+                pass
+
+            leads.append({
+                "business_name": name,
+                "city": city,
+                "address": address,
+                "phone": phone,
+                "website": website,
+                "email": "",
+                "status": "new",
+            })
+            print(f"  [+] {name} | {website or 'no website'}")
 
     except Exception as e:
         print(f"  [!] Error scraping {city}: {e}")
@@ -105,29 +109,15 @@ async def scrape_city(page, city: str) -> list[dict]:
     return leads
 
 
-async def run_scraper():
+def run_scraper():
     all_leads = []
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        context = await browser.new_context(
-            user_agent=(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            )
-        )
-        page = await context.new_page()
+    for city in CITIES:
+        print(f"\nScraping: {city}")
+        leads = scrape_city(city)
+        all_leads.extend(leads)
+        time.sleep(3)  # polite delay between cities
 
-        for city in CITIES:
-            print(f"\nScraping: {city}")
-            leads = await scrape_city(page, city)
-            all_leads.extend(leads)
-            time.sleep(2)  # polite delay between cities
-
-        await browser.close()
-
-    # Save to CSV
     if all_leads:
         with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=all_leads[0].keys())
@@ -141,4 +131,4 @@ async def run_scraper():
 
 
 if __name__ == "__main__":
-    asyncio.run(run_scraper())
+    run_scraper()
