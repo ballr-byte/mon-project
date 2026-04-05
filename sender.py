@@ -24,6 +24,7 @@ TOKEN_FILE = "token.pickle"
 SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
 SENDER_NAME = "Peakline Marketing"
+SENDER_EMAIL = "peakline.org@gmail.com"
 DAILY_LIMIT = 50          # max emails per run
 DELAY_BETWEEN_EMAILS = 60  # seconds between sends (avoids spam flags)
 
@@ -88,7 +89,7 @@ def send_email(service, to_email: str, business_name: str) -> bool:
     message = MIMEMultipart("alternative")
     message["to"] = to_email
     message["subject"] = subject
-    message["from"] = SENDER_NAME
+    message["from"] = f"{SENDER_NAME} <{SENDER_EMAIL}>"
 
     message.attach(MIMEText(body, "plain"))
 
