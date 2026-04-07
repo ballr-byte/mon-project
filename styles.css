@@ -95,9 +95,7 @@ body {
 
 .nav__logo { text-decoration: none; display: flex; align-items: center; }
 .nav__logo-img {
-  height: 48px; width: auto;
-  mix-blend-mode: screen;
-  filter: brightness(1.1);
+  height: 72px; width: auto;
 }
 
 .nav__links {
