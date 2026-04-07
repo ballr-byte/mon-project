@@ -21,27 +21,24 @@ const amounts = document.querySelectorAll('.price__amount');
 const labelMonthly = document.getElementById('label-monthly');
 const labelAnnual  = document.getElementById('label-annual');
 
+const periods = document.querySelectorAll('.price__period');
+
 toggle.addEventListener('click', () => {
   const isAnnual = toggle.getAttribute('aria-pressed') === 'true';
   toggle.setAttribute('aria-pressed', String(!isAnnual));
 
   if (!isAnnual) {
-    // Switch to annual
-    amounts.forEach(el => {
-      el.textContent = '$' + el.dataset.annual;
-    });
+    amounts.forEach(el => { el.textContent = '$' + el.dataset.annual; });
+    periods.forEach(el => { el.textContent = '/year'; });
     labelAnnual.classList.add('active');
     labelMonthly.classList.remove('active');
   } else {
-    // Switch back to monthly
-    amounts.forEach(el => {
-      el.textContent = '$' + el.dataset.monthly;
-    });
+    amounts.forEach(el => { el.textContent = '$' + el.dataset.monthly; });
+    periods.forEach(el => { el.textContent = '/month'; });
     labelMonthly.classList.add('active');
     labelAnnual.classList.remove('active');
   }
 });
-// Set initial active label
 labelMonthly.classList.add('active');
 
 // ── Contact form ──
