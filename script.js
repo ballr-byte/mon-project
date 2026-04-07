@@ -41,6 +41,23 @@ toggle.addEventListener('click', () => {
 });
 labelMonthly.classList.add('active');
 
+// ── FAQ accordion ──
+document.querySelectorAll('.faq__question').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const isOpen = btn.getAttribute('aria-expanded') === 'true';
+    // Close all
+    document.querySelectorAll('.faq__question').forEach(b => {
+      b.setAttribute('aria-expanded', 'false');
+      b.nextElementSibling.style.maxHeight = null;
+    });
+    // Open clicked if it was closed
+    if (!isOpen) {
+      btn.setAttribute('aria-expanded', 'true');
+      btn.nextElementSibling.style.maxHeight = btn.nextElementSibling.scrollHeight + 'px';
+    }
+  });
+});
+
 // ── Contact form ──
 document.getElementById('contactForm').addEventListener('submit', e => {
   e.preventDefault();
