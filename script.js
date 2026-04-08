@@ -59,10 +59,8 @@ document.querySelectorAll('.faq__question').forEach(btn => {
 });
 
 // ── Contact form ──
-document.getElementById('contactForm').addEventListener('submit', e => {
-  e.preventDefault();
-  const btn = e.target.querySelector('button[type="submit"]');
-  btn.textContent = '✓ Request Received — We\'ll be in touch!';
-  btn.style.background = '#16a34a';
+document.getElementById('contactForm').addEventListener('submit', function(e) {
+  const btn = this.querySelector('button[type="submit"]');
+  btn.textContent = 'Sending...';
   btn.disabled = true;
 });
