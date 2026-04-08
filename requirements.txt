@@ -4,3 +4,4 @@ beautifulsoup4==4.12.3
 google-auth==2.29.0
 google-auth-oauthlib==1.2.0
 google-api-python-client==2.127.0
+facebook-business==20.0.0
